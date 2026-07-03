@@ -1,0 +1,46 @@
+name: Job Search Agent
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"   # every 30 min (GitHub may delay a few minutes)
+  workflow_dispatch: {}       # manual "Run workflow" button
+
+concurrency:
+  group: job-agent
+  cancel-in-progress: false
+
+permissions:
+  contents: write             # to commit state files back
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run agent cycle
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          CALLMEBOT_PHONE: ${{ secrets.CALLMEBOT_PHONE }}
+          CALLMEBOT_APIKEY: ${{ secrets.CALLMEBOT_APIKEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          RESUME_B64: ${{ secrets.RESUME_B64 }}
+          RESUME_EXT: ${{ secrets.RESUME_EXT }}
+        run: python main.py
+
+      - name: Commit state back to repo
+        run: |
+          git config user.name "job-agent[bot]"
+          git config user.email "actions@users.noreply.github.com"
+          git add data/
+          git diff --staged --quiet || { git commit -m "chore: agent state [skip ci]"; git pull --rebase; git push; }

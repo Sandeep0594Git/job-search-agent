@@ -1,0 +1,85 @@
+# ============================================================
+# Job Search Agent - configuration
+# Edit this file to change what the agent looks for.
+# ============================================================
+
+search:
+  # Each term is searched separately on every portal.
+  terms:
+    - "Presales Consultant"
+    - "Solution Consultant"
+    - "Solutions Engineer"
+    - "Solution Architect"
+    - "Cloud Consultant"
+    - "Managed Services Consultant"
+    - "Delivery Manager"
+    - "Engagement Manager"
+    - "Technical Program Manager"
+
+  # Portals to search. Supported: linkedin, indeed, naukri, glassdoor
+  sites:
+    - linkedin
+    - indeed
+    - naukri
+
+  # Locations searched one by one. "India" alone covers all metros + remote
+  # on these portals. Every extra location multiplies runtime (terms x
+  # locations x portals), so only add metros if results feel thin.
+  locations:
+    - "India"
+    # - "Bengaluru"
+    # - "Hyderabad"
+    # - "Pune"
+    # - "Mumbai"
+    # - "Delhi NCR"
+    # - "Chennai"
+
+  country_indeed: "india"
+
+  # Only jobs posted within this many hours (keeps each run fast and fresh).
+  lookback_hours: 6
+
+  # Max results requested per term per location.
+  results_per_search: 10
+
+  # Include remote jobs (user is flexible: office / hybrid / remote, any shift)
+  include_remote: true
+
+filters:
+  # A job matches if ANY of these appear in title or description.
+  # Leave empty [] to disable keyword filtering and get everything.
+  any_keywords:
+    - presales
+    - pre-sales
+    - solution
+    - cloud
+    - gcp
+    - google cloud
+    - aws
+    - azure
+    - managed services
+    - msp
+    - delivery
+    - engagement manager
+    - program manager
+    - sre
+    - finops
+
+  # A job is dropped if ANY of these appear in the title.
+  exclude_title_keywords:
+    - intern
+    - fresher
+    - trainee
+
+notify:
+  # Max individual Telegram job alerts per run (rest are summarized).
+  max_telegram_alerts_per_run: 12
+  # WhatsApp (CallMeBot) gets one compact digest per run, not per-job spam.
+  whatsapp_digest: true
+
+tailor:
+  # Gemini model used for JD analysis + resume tailoring (free tier).
+  model: "gemini-2.5-flash"
+  # Folder scanned for your baseline resume (.pdf / .docx / .md / .txt).
+  resume_dir: "resume"
+  output_dir: "output"

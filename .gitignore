@@ -1,0 +1,16 @@
+# Secrets - NEVER commit
+.env
+
+# Your personal resume stays local unless you choose to commit it
+# (recommended: keep repo private OR use the RESUME_B64 secret instead)
+resume/*
+!resume/README.md
+
+# Generated tailored resumes
+output/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
