@@ -12,17 +12,23 @@ log = logging.getLogger("agent.search")
 
 def _matches_filters(title: str, description: str, filters: dict) -> bool:
     title_l = (title or "").lower()
-    desc_l = (description or "").lower()
-    haystack = title_l + " " + desc_l
 
     for bad in filters.get("exclude_title_keywords") or []:
         if bad.lower() in title_l:
             return False
 
+    # Title gate: the job TITLE itself must contain a role keyword. This is
+    # what keeps loosely-related portal results (Analyst, Sales...) out.
+    title_any = filters.get("title_any_keywords") or []
+    if title_any and not any(kw.lower() in title_l for kw in title_any):
+        return False
+
     any_kw = filters.get("any_keywords") or []
-    if not any_kw:
-        return True
-    return any(kw.lower() in haystack for kw in any_kw)
+    if any_kw:
+        haystack = title_l + " " + (description or "").lower()
+        if not any(kw.lower() in haystack for kw in any_kw):
+            return False
+    return True
 
 
 def _row_to_job(row) -> dict:

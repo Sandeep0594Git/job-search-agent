@@ -57,8 +57,28 @@ search:
   include_remote: true
 
 filters:
-  # A job matches if ANY of these appear in title or description.
-  # Leave empty [] to disable keyword filtering and get everything.
+  # TITLE GATE (the important one): the job title itself must contain at
+  # least one of these, otherwise the job is dropped. This is what keeps
+  # loosely-related portal results (Analyst, Sales Executive...) out.
+  # Leave empty [] to disable.
+  title_any_keywords:
+    - presales
+    - pre-sales
+    - pre sales
+    - solution          # Solution(s) Consultant / Engineer / Architect
+    - cloud
+    - managed services
+    - delivery manager
+    - delivery lead
+    - engagement manager
+    - program manager
+    - technical account manager
+    - architect
+    - bid manager
+    - finops
+
+  # Secondary check on title+description (any match passes). Catches e.g.
+  # an "Architect" title that has nothing to do with cloud/IT.
   any_keywords:
     - presales
     - pre-sales
@@ -76,11 +96,20 @@ filters:
     - sre
     - finops
 
-  # A job is dropped if ANY of these appear in the title.
+  # A job is dropped if ANY of these appear in the title. NOTE: these are
+  # substring matches - never add plain "sales" here or anything like
+  # "sales executive", because "preSALES EXECUTIVE" contains it too.
   exclude_title_keywords:
     - intern
     - fresher
     - trainee
+    - analyst
+    - inside sales
+    - field sales
+    - business development
+    - telesales
+    - telecaller
+    - bpo
 
 notify:
   # Max individual Telegram job alerts per run (rest are summarized).
