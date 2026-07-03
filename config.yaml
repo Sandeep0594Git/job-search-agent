@@ -36,6 +36,17 @@ search:
 
   country_indeed: "india"
 
+  # Adzuna (official API, aggregates company career portals + boards).
+  # Activates automatically once ADZUNA_APP_ID / ADZUNA_APP_KEY secrets exist.
+  # Free key: https://developer.adzuna.com
+  adzuna:
+    country: "in"
+    where: "India"
+    # one API call per cycle; matches jobs containing ANY of these words
+    what_or: "presales solution consultant architect cloud managed delivery engagement program"
+    max_days_old: 1
+    results: 50
+
   # Only jobs posted within this many hours (keeps each run fast and fresh).
   lookback_hours: 6
 

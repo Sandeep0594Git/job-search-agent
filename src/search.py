@@ -5,6 +5,7 @@ import pandas as pd
 from jobspy import scrape_jobs
 
 from . import store
+from .adzuna import search_adzuna
 
 log = logging.getLogger("agent.search")
 
@@ -47,6 +48,15 @@ def run_search(cfg: dict) -> list:
     seen = store.load_seen()
     catalog = store.load_catalog()
 
+    def ingest(job: dict):
+        if not job["url"] or job["id"] in seen:
+            return
+        seen.add(job["id"])  # mark even if filtered, so we never re-check
+        if not _matches_filters(job["title"], job["description"], filters):
+            return
+        catalog[job["id"]] = job
+        new_jobs.append(job)
+
     new_jobs = []
     for term in s["terms"]:
         for location in s["locations"]:
@@ -70,14 +80,11 @@ def run_search(cfg: dict) -> list:
                 continue
 
             for _, row in df.iterrows():
-                job = _row_to_job(row)
-                if not job["url"] or job["id"] in seen:
-                    continue
-                seen.add(job["id"])  # mark even if filtered, so we never re-check
-                if not _matches_filters(job["title"], job["description"], filters):
-                    continue
-                catalog[job["id"]] = job
-                new_jobs.append(job)
+                ingest(_row_to_job(row))
+
+    # Adzuna: career-portal aggregator via official API (one call per cycle)
+    for job in search_adzuna(cfg):
+        ingest(job)
 
     store.save_seen(seen)
     store.save_catalog(catalog)
