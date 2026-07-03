@@ -80,5 +80,8 @@ def process_commands(cfg: dict):
             _handle_recent()
         elif text.startswith(("/help", "/start")):
             tg_send(HELP)
+        else:
+            # anything else: don't leave the user hanging in silence
+            tg_send("🤖 I only understand commands, not chat.\n\n" + HELP)
 
     store.save_offset(offset)
