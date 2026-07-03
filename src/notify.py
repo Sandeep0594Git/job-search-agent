@@ -94,9 +94,20 @@ def notify_new_jobs(jobs: list, cfg: dict):
         tg_send(format_job_alert(job))
     if len(jobs) > max_alerts:
         extra = jobs[max_alerts:]
-        lines = [f"…plus {len(extra)} more matches:"]
-        lines += [f"• {j['title']} @ {j['company']} — /tailor {j['id']}" for j in extra[:20]]
-        tg_send(html.escape("\n".join(lines)))
+        lines = [
+            f"• <a href=\"{html.escape(j['url'])}\">{html.escape(j['title'])} @ "
+            f"{html.escape(j['company'])}</a> — <code>/tailor {j['id']}</code>"
+            for j in extra
+        ]
+        # chunk into <=4096-char Telegram messages
+        chunk = f"…plus {len(extra)} more matches:"
+        for line in lines:
+            if len(chunk) + len(line) + 1 > 3900:
+                tg_send(chunk)
+                chunk = line
+            else:
+                chunk += "\n" + line
+        tg_send(chunk)
 
     if ncfg.get("whatsapp_digest", True):
         lines = [f"🔎 {len(jobs)} new job match(es):"]
