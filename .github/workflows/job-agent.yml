@@ -2,7 +2,9 @@ name: Job Search Agent
 
 on:
   schedule:
-    - cron: "*/30 * * * *"   # every 30 min (GitHub may delay a few minutes)
+    # every 30 min at off-peak minutes (:13/:43): GitHub silently drops
+    # scheduled runs at busy marks like :00/:30, so never use those.
+    - cron: "13,43 * * * *"
   workflow_dispatch: {}       # manual "Run workflow" button
 
 concurrency:
