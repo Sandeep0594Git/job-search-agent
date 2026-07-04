@@ -13,32 +13,47 @@ log = logging.getLogger("agent.commands")
 
 HELP = (
     "🤖 <b>Job Search Agent</b>\n\n"
-    "/tailor &lt;job-id&gt; — analyze the JD and send back a tailored resume (.docx)\n"
+    "/apply &lt;job-id&gt; — full application pack: fit analysis, tailored "
+    "resume + cover letter (.docx), and the apply link\n"
+    "/tailor &lt;job-id&gt; — tailored resume + fit analysis only\n"
     "/recent — list the last 10 jobs found\n"
     "/help — this message\n\n"
     "Job ids are shown in every alert. New jobs are checked every ~30 min."
 )
 
 
-def _handle_tailor(job_ref: str, cfg: dict):
+def _handle_tailor(job_ref: str, cfg: dict, full_pack: bool = False):
     catalog = store.load_catalog()
     job = catalog.get(job_ref.strip())
     if not job:
         tg_send(f"⚠️ Job id <code>{html.escape(job_ref)}</code> not found. "
                 "Use /recent to list available ids.")
         return
-    tg_send(f"⏳ Tailoring your resume for <b>{html.escape(job['title'])}</b> "
+    what = "application pack" if full_pack else "resume"
+    tg_send(f"⏳ Preparing your {what} for <b>{html.escape(job['title'])}</b> "
             f"@ {html.escape(job['company'])} …")
     try:
-        analysis, docx_path = tailor_resume(job, cfg)
+        analysis, resume_path, cover_path = tailor_resume(job, cfg)
     except Exception as e:
         log.exception("tailoring failed")
         tg_send(f"❌ Tailoring failed: {html.escape(str(e))}")
         return
     if analysis:
         tg_send(f"📊 <b>Fit analysis</b>\n{html.escape(analysis)}")
-    tg_send_document(docx_path,
+    tg_send_document(resume_path,
                      caption=f"Tailored resume — {job['title']} @ {job['company']}")
+    if full_pack:
+        if cover_path:
+            tg_send_document(cover_path,
+                             caption=f"Cover letter — {job['title']} @ {job['company']}")
+        tg_send(
+            "🚀 <b>Ready to apply</b>\n"
+            f"1. Review both documents (30 sec sanity check)\n"
+            f"2. <a href=\"{html.escape(job['url'])}\">Open the application page</a>\n"
+            "3. Upload, submit, done.\n\n"
+            "I don't submit for you — portals ban bot accounts, and your "
+            "profile is worth more than two saved clicks."
+        )
 
 
 def _handle_recent():
@@ -70,12 +85,13 @@ def process_commands(cfg: dict):
             continue  # ignore strangers and non-text updates
 
         log.info("command: %s", text)
-        if text.startswith("/tailor"):
+        if text.startswith(("/tailor", "/apply")):
+            cmd = "/apply" if text.startswith("/apply") else "/tailor"
             parts = text.split(maxsplit=1)
             if len(parts) == 2:
-                _handle_tailor(parts[1], cfg)
+                _handle_tailor(parts[1], cfg, full_pack=(cmd == "/apply"))
             else:
-                tg_send("Usage: <code>/tailor &lt;job-id&gt;</code>")
+                tg_send(f"Usage: <code>{cmd} &lt;job-id&gt;</code>")
         elif text.startswith("/recent"):
             _handle_recent()
         elif text.startswith(("/help", "/start")):

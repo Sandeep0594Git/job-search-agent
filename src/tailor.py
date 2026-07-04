@@ -18,7 +18,7 @@ PROMPT = """You are an expert resume writer and career coach.
 
 Below is my BASELINE RESUME and a TARGET JOB DESCRIPTION.
 
-Produce TWO sections in your reply, exactly in this format:
+Produce THREE sections in your reply, exactly in this format:
 
 ===FIT ANALYSIS===
 A short analysis (max 150 words): fit score out of 10, top 3 strengths to
@@ -34,6 +34,12 @@ The full tailored resume, rewritten to target this job. Rules:
   '## ' are section headings, '- ' are bullet points, everything else is a
   normal paragraph. No markdown bold/italic/tables.
 - Keep it to roughly 1-2 pages of content.
+
+===COVER LETTER===
+A concise cover letter (max 250 words) to the hiring team at the target
+company for this specific role. Truthful, specific, grounded in the baseline
+resume; open with why this role, close with a confident call to action.
+Plain paragraphs only, no addresses or date lines.
 
 ===BASELINE RESUME===
 {resume}
@@ -116,7 +122,8 @@ def _render_docx(resume_text: str, out_path: Path):
 # ---------------- Public API ----------------
 
 def tailor_resume(job: dict, cfg: dict) -> tuple:
-    """Returns (fit_analysis_text, docx_path)."""
+    """Returns (fit_analysis_text, resume_docx_path, cover_letter_docx_path).
+    cover_letter_docx_path is None if the model omitted that section."""
     if not Secrets.gemini_ready():
         raise RuntimeError("GEMINI_API_KEY is not set - cannot tailor resume.")
 
@@ -130,13 +137,23 @@ def tailor_resume(job: dict, cfg: dict) -> tuple:
         model=tcfg.get("model", "gemini-2.5-flash"),
     )
 
-    analysis, resume_out = "", reply
-    m = re.split(r"===TAILORED RESUME===", reply, maxsplit=1)
-    if len(m) == 2:
-        analysis = m[0].replace("===FIT ANALYSIS===", "").strip()
-        resume_out = m[1].strip()
+    analysis, resume_out, cover_out = "", reply, ""
+    if "===TAILORED RESUME===" in reply:
+        analysis, rest = reply.split("===TAILORED RESUME===", 1)
+        analysis = analysis.replace("===FIT ANALYSIS===", "").strip()
+        if "===COVER LETTER===" in rest:
+            resume_out, cover_out = rest.split("===COVER LETTER===", 1)
+        else:
+            resume_out = rest
+        resume_out, cover_out = resume_out.strip(), cover_out.strip()
 
     safe_company = re.sub(r"[^A-Za-z0-9]+", "_", job["company"])[:30] or "company"
-    out_path = ROOT / (tcfg.get("output_dir") or "output") / f"Resume_{safe_company}_{job['id']}.docx"
-    _render_docx(resume_out, out_path)
-    return analysis, out_path
+    out_dir = ROOT / (tcfg.get("output_dir") or "output")
+    resume_path = out_dir / f"Resume_{safe_company}_{job['id']}.docx"
+    _render_docx(resume_out, resume_path)
+
+    cover_path = None
+    if cover_out:
+        cover_path = out_dir / f"CoverLetter_{safe_company}_{job['id']}.docx"
+        _render_docx(cover_out, cover_path)
+    return analysis, resume_path, cover_path

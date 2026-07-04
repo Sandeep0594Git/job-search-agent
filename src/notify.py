@@ -59,7 +59,8 @@ def format_job_alert(job: dict) -> str:
         f"🌐 {html.escape(job['site'])}"
         f"{' · ' + html.escape(job['date_posted']) if job.get('date_posted') else ''}\n"
         f"🔗 <a href=\"{html.escape(job['url'])}\">Open job posting</a>\n\n"
-        f"➡️ Reply <code>/tailor {job['id']}</code> for a tailored resume"
+        f"➡️ <code>/apply {job['id']}</code> — resume + cover letter + link\n"
+        f"➡️ <code>/tailor {job['id']}</code> — tailored resume only"
     )
 
 
