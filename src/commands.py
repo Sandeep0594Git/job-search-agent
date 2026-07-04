@@ -6,6 +6,7 @@ import logging
 
 from . import store
 from .config import Secrets
+from .jd_fetch import job_from_text, job_from_url
 from .notify import tg_call, tg_send, tg_send_document
 from .tailor import tailor_resume
 
@@ -13,21 +14,36 @@ log = logging.getLogger("agent.commands")
 
 HELP = (
     "🤖 <b>Job Search Agent</b>\n\n"
-    "/apply &lt;job-id&gt; — full application pack: fit analysis, tailored "
-    "resume + cover letter (.docx), and the apply link\n"
-    "/tailor &lt;job-id&gt; — tailored resume + fit analysis only\n"
+    "/apply &lt;job-id | link | pasted JD&gt; — full application pack: fit "
+    "analysis, tailored resume + cover letter (.docx), and the apply link\n"
+    "/tailor &lt;job-id | link | pasted JD&gt; — tailored resume + analysis only\n"
     "/recent — list the last 10 jobs found\n"
     "/help — this message\n\n"
-    "Job ids are shown in every alert. New jobs are checked every ~30 min."
+    "Works with alert job-ids, any job URL you found yourself, or a "
+    "copy-pasted job description. New jobs are checked every ~30 min."
 )
 
 
+def _resolve_job(ref: str):
+    """Accepts a catalog job id, a job posting URL, or pasted JD text."""
+    ref = ref.strip()
+    if ref.lower().startswith(("http://", "https://")):
+        return job_from_url(ref.split()[0])
+    job = store.load_catalog().get(ref)
+    if job:
+        return job
+    if len(ref) > 200:  # long non-URL text = a pasted job description
+        return job_from_text(ref)
+    raise ValueError(f"job id <code>{html.escape(ref)}</code> not found. Send a "
+                     "job id from an alert, a job link, or paste the JD text. "
+                     "Use /recent to list known ids.")
+
+
 def _handle_tailor(job_ref: str, cfg: dict, full_pack: bool = False):
-    catalog = store.load_catalog()
-    job = catalog.get(job_ref.strip())
-    if not job:
-        tg_send(f"⚠️ Job id <code>{html.escape(job_ref)}</code> not found. "
-                "Use /recent to list available ids.")
+    try:
+        job = _resolve_job(job_ref)
+    except ValueError as e:
+        tg_send(f"⚠️ {e}")
         return
     what = "application pack" if full_pack else "resume"
     tg_send(f"⏳ Preparing your {what} for <b>{html.escape(job['title'])}</b> "
@@ -46,10 +62,12 @@ def _handle_tailor(job_ref: str, cfg: dict, full_pack: bool = False):
         if cover_path:
             tg_send_document(cover_path,
                              caption=f"Cover letter — {job['title']} @ {job['company']}")
+        link_line = (f"2. <a href=\"{html.escape(job['url'])}\">Open the application page</a>\n"
+                     if job.get("url") else "2. Open the job posting\n")
         tg_send(
             "🚀 <b>Ready to apply</b>\n"
-            f"1. Review both documents (30 sec sanity check)\n"
-            f"2. <a href=\"{html.escape(job['url'])}\">Open the application page</a>\n"
+            "1. Review both documents (30 sec sanity check)\n"
+            + link_line +
             "3. Upload, submit, done.\n\n"
             "I don't submit for you — portals ban bot accounts, and your "
             "profile is worth more than two saved clicks."
