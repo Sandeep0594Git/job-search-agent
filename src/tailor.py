@@ -6,9 +6,18 @@ import re
 from pathlib import Path
 
 from docx import Document
-from docx.shared import Pt
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
+from docx.shared import Inches, Pt, RGBColor
 
 from .config import ROOT, Secrets
+
+ACCENT = RGBColor(0x1F, 0x3A, 0x5F)   # dark navy for name + section headings
+MUTED = RGBColor(0x55, 0x55, 0x55)    # grey for contact/company lines
+_DATE_RE = re.compile(
+    r"\b(19|20)\d{2}\b|\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)"
+    r"[a-z]*\.?\s+\d{4}", re.IGNORECASE)
 
 log = logging.getLogger("agent.tailor")
 
@@ -97,24 +106,100 @@ def _gemini(prompt: str, model: str) -> str:
 
 # ---------------- DOCX rendering ----------------
 
+def _bottom_border(paragraph):
+    """Add a thin accent rule under a paragraph (used for section headings)."""
+    pPr = paragraph._p.get_or_add_pPr()
+    pbdr = OxmlElement("w:pBdr")
+    bottom = OxmlElement("w:bottom")
+    bottom.set(qn("w:val"), "single")
+    bottom.set(qn("w:sz"), "6")
+    bottom.set(qn("w:space"), "2")
+    bottom.set(qn("w:color"), "1F3A5F")
+    pbdr.append(bottom)
+    pPr.append(pbdr)
+
+
 def _render_docx(resume_text: str, out_path: Path):
+    """Render the plain-marked resume text into a clean, professional .docx.
+
+    Marks produced by the model:
+      '# '  -> candidate name (large, centered)
+      '## ' -> section heading (accent, ruled)
+      '- '  -> bullet point
+      other -> paragraph; contact/tagline lines (before first section) are
+               centered grey; role lines with dates are bolded; 'A | B'
+               company/location lines are italic grey.
+    """
     doc = Document()
-    style = doc.styles["Normal"]
-    style.font.name = "Calibri"
-    style.font.size = Pt(10.5)
+    for section in doc.sections:
+        section.top_margin = section.bottom_margin = Inches(0.5)
+        section.left_margin = section.right_margin = Inches(0.6)
+
+    normal = doc.styles["Normal"]
+    normal.font.name = "Calibri"
+    normal.font.size = Pt(10)
+    normal.paragraph_format.space_after = Pt(2)
+    normal.paragraph_format.line_spacing = 1.05
+
+    in_header = False  # between the name and the first '## ' section
 
     for raw in resume_text.splitlines():
         line = raw.rstrip()
         if not line.strip():
             continue
+
         if line.startswith("# "):
-            doc.add_heading(line[2:].strip(), level=0)
+            p = doc.add_paragraph()
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            p.paragraph_format.space_after = Pt(2)
+            run = p.add_run(line[2:].strip().upper())
+            run.bold = True
+            run.font.size = Pt(20)
+            run.font.color.rgb = ACCENT
+            in_header = True
+
         elif line.startswith("## "):
-            doc.add_heading(line[3:].strip(), level=1)
+            in_header = False
+            p = doc.add_paragraph()
+            p.paragraph_format.space_before = Pt(9)
+            p.paragraph_format.space_after = Pt(3)
+            run = p.add_run(line[3:].strip().upper())
+            run.bold = True
+            run.font.size = Pt(11)
+            run.font.color.rgb = ACCENT
+            _bottom_border(p)
+
         elif re.match(r"^\s*[-*•]\s+", line):
-            doc.add_paragraph(re.sub(r"^\s*[-*•]\s+", "", line), style="List Bullet")
+            in_header = False
+            p = doc.add_paragraph(re.sub(r"^\s*[-*•]\s+", "", line),
+                                  style="List Bullet")
+            p.paragraph_format.space_after = Pt(2)
+
+        elif in_header:
+            # tagline + contact block under the name
+            p = doc.add_paragraph()
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            run = p.add_run(line)
+            run.font.size = Pt(9.5)
+            run.font.color.rgb = MUTED
+
+        elif " | " in line:
+            p = doc.add_paragraph()
+            run = p.add_run(line)
+            run.italic = True
+            run.font.size = Pt(9.5)
+            run.font.color.rgb = MUTED
+
+        elif _DATE_RE.search(line):
+            p = doc.add_paragraph()
+            p.paragraph_format.space_before = Pt(5)
+            run = p.add_run(line)
+            run.bold = True
+            run.font.size = Pt(10.5)
+
         else:
             doc.add_paragraph(line)
+
     out_path.parent.mkdir(exist_ok=True)
     doc.save(str(out_path))
 
